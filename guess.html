@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Getting to Know You</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<script type="text/javascript" src="https://use.typekit.com/juj7nhw.js"></script>
+<script type="text/javascript">try{Typekit.load();}catch(e){}</script>
+<link rel="stylesheet" href="_assets/css/default.css" />
+</head>
+<body>
+<div id="page-container">
+  <h1>DSET Conference Quiz</h1>
+  <div id="intro">
+    <p id="greeting"></p>
+    <div id="status">Please wait.<div></div></div>
+  </div>
+  <div id="quiz-container">
+     <form id="quiz"></form>
+  </div>
+</div>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+<script src="_assets/js/common.js"></script>
+<script>
+
+var guesses = '',
+    responses = '';
+
+$(document).ready(function(){
+  $('#greeting').show();
+  user_email = readCookie('user_email');
+  user_fname = readCookie('user_fname');
+  user_lname = readCookie('user_lname');
+  user_code = readCookie('user_code');
+  if (user_email != null) {
+    getGuesses();
+  } else {
+     authenticateUser();
+  }
+});
+
+function checkCode() {
+  var code;
+  if (user_code == null) {
+    code = $('#code').val();
+    createCookie('user_code', code, 5);
+  } else {
+    code = user_code;
+  }
+  $.ajax({
+    method: "POST",
+    data: {c: code},
+    url: 'check-code.php'
+  }).done(function(data) {
+    setUserValues(data);
+  });
+}
+
+// Creates a list of attendees to choose from
+function setUserValues(data) {
+  var user_details = JSON.parse(data);
+  user_email = user_details.email_address;
+  user_fname = user_details.fname;
+  user_lname = user_details.lname;
+  if (user_email != '') {
+    $('#quiz').hide();
+    $('#greeting').html('');
+    status_timer = setInterval('updateStatus()', 100);
+    //console.log(user_email);
+    //console.log(user_fname + ' ' + user_lname);
+    createCookie('user_email', user_email, 5);
+    createCookie('user_fname', user_fname, 5);
+    createCookie('user_lname', user_lname, 5);
+    getGuesses()
+  } else {
+    alert('Sorry, but I didn\'t find that code in our database. Are you sure you entered it correctly?');
+  }
+}
+
+function initializePage() {
+  $('#status').show();
+  status_timer = setInterval('updateStatus()', 100);
+  $('#greeting').show();
+  $('#quiz-container').hide().html('<form id="quiz"></form>');
+  getGuesses();
+}
+
+// Gets data for guesses user has already made
+function getGuesses() {
+  $('#greeting').html('Tell us what you know about your fellow conference attendees<span id="user"></span>! Click a name to get started. (Note: attendees who haven\'t answered any questions about themselves will not show up on this list.)');
+  $('#quiz').show();
+  $.ajax({
+    method: "POST",
+    data: {e: user_email},
+    url: 'get-guesses.php'
+  }).done(function(data) {
+    guesses = JSON.parse(data);
+    //console.log('User\'s Existing Guess Data:');
+    //console.log(guesses);
+    startGuessQuiz();
+  });
+}
+
+// Starts the guessing quiz-building process, first trigger attendee list creation
+function startGuessQuiz() {
+  $('input').prop('disabled', true);
+  $.ajax({
+    method: "POST",
+    data: {e: user_email, g: 1},
+    url: 'attendees.php'
+  }).done(function(data) {
+    populateAttendeesList(data);
+  });
+}
+
+// Creates a list of attendees well-known by user to choose from
+function populateAttendeesList(data) {
+  //console.log(data);
+  if (data == '[]') {
+    $('#greeting').html('Before you can make guesses about other attendees, you\'ll need to <a href="know.html">tell us how well you know some of them</a>.<br /><br />If you don\'t see any names below, it\s either because you haven\t provided that information, or the people you know well haven\'t answered any questions about themselves yet.').show();
+  } else {
+    $('#quiz').html('<ul id="attendee-list"></ul>');
+    //console.log('Known Attendee\'s Info:');
+    //console.log(data);
+    attendees = JSON.parse(data);
+    var attendees_list_html = '';
+    for (var i = 0; i < attendees.length; i++) {
+      if (attendees[i].email_address != user_email) {
+        var guessed_all = checkGuessStatus(attendees[i]);
+        if (guessed_all) {
+          attendees_list_html += '<li>' + attendees[i].name + ' <span class="note">(You\'ve guessed all ' + attendees[i].name + '\'s answers.)</span></li>';
+        } else {
+          attendees_list_html += '<li><a href="#" onclick="makeAGuess(\'' + attendees[i].email_address + '\'); return false;">' + attendees[i].name + '</a></li>';
+        }
+      }
+    }
+    $('#attendee-list').html(attendees_list_html).show();
+    $('#quiz-container').show();
+    $('#status').hide();
+  }
+  clearInterval(status_timer);
+}
+
+function checkGuessStatus(target_attendee) {
+  var uid = target_attendee.uid;
+
+  // count target attendee's responses. how?
+
+  // count user's correct guesses about target_attendee
+  var num_correct = 0;
+  for (gi = 0; gi < guesses.length; gi++) {
+    for (var prop in guesses[gi]) {
+        if (!(prop == 'uid')) {
+          qlabel = prop;
+          break;
+        }
+    }
+    //console.log(guesses[gi][qlabel]);
+    if (guesses[gi][qlabel] == 1 && guesses[gi]['uid'] == uid) {
+      num_correct++;
+    }
+  }
+  //console.log(num_correct);
+  if (num_correct == 25) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+// Starts the process of making a guess, first gets list of all available questions
+function makeAGuess(email_address) {
+  attendee_email = email_address;
+  // get attendee name by matching email address to attendees list
+  for (ai = 0; ai < attendees.length; ai++) {
+    if (attendees[ai].email_address == attendee_email) {
+      attendee_name = attendees[ai].name;
+      attendee_uid = attendees[ai].uid;
+    }
+  }
+  $('#quiz-container').hide().html('<p id="how">How would <strong><span id="attendee-name"></span></strong> answer this question?</p><form id="quiz"></form>');
+  $('#attendee-name').text(attendee_name);
+  status_timer = setInterval('updateStatus()', 100);
+  // get question text and possible answers
+  $.ajax({
+    method: "POST",
+    data: {e: email_address, g: 1},
+    url: 'get-responses.php'
+  }).done(function(data) {
+    //console.log('Target Attendee\'s Response Data:');
+    //console.log(data);
+    responses = JSON.parse(data);
+    // remove any questions that target attendee hasn't answered yet
+    Object.keys(responses).forEach(function(key,index) {
+      if (responses[key] == '') {
+        delete responses[key];
+      }
+    });
+
+    // remove any questions user has already guessed correctly about target attendee
+    Object.keys(responses).forEach(function(key,index) {
+      if (key != 'uid') {
+        for (var gi = 0; gi < guesses.length; gi++) {
+          if (guesses[gi][key] == 1 && guesses[gi]['uid'] == attendee_uid) {
+            delete responses[key];
+          }
+        }
+      }
+    });
+    //console.log('Target Attendee\'s Cleaned Response Data:');
+    //console.log(responses);
+
+    qlabel = '',
+    qlabels = [];
+    for (var prop in responses) {
+        if (!(prop == 'uid')) {
+          qlabels.push(prop);
+        }
+    }
+    var random_num = getRandomInt(0, qlabels.length-1);
+    qlabel = qlabels[random_num];
+    if (qlabel != undefined && qlabel != '' && qlabel != 'uid') {
+      getQuestion(qlabel);
+    } else {
+      $('#greeting').html('You\'ve guessed all the answers ' + attendee_name + ' has answered at this time. <br /><br />How about <a href="#" onclick="initializePage();return false;">making a guess about somebody else</a>?').show();
+    }
+  });
+}
+
+function getQuestion(qlabel) {
+  $.ajax({
+    method: "POST",
+    data: {q: qlabel, ta: attendee_uid},
+    url: 'get-questions.php'
+  }).done(function(data) {
+    // build HTML for a question that's left
+    question = JSON.parse(data);
+    var question_html = '',
+        qtype = question.type,
+        qtext = question.text,
+        qlabel = question.label;
+
+    if (qtype == 'MC' || qtype == 'OT' || qtype == 'ON') {
+      question_html += '<dt>' + qtext + '</dt>';
+      for (var o_count = 1; o_count < 10; o_count++) {
+        var response_name = 'response' + o_count;
+        if (question[response_name]) {
+          question_html += '<dd><label for="resp-o' + o_count + '"><input type="radio" name="resp" id="resp-o' + o_count + '" value="' + question[response_name] + '" /> ' + question[response_name] + '</label></dd>';
+        }
+      }
+    } else if (qtype == 'N') {
+      question_html += '<dt>' + qtext + '</dt>';
+      question_html += '<dd><label for="resp"><input type="number" size="5" min="0" name="resp" id="resp" value="" /></label></dd>';
+    } else {
+      question_html += '<dt>' + qtext + '</dt>';
+      question_html += '<dd><label for="resp"><input type="text" name="resp" id="resp" value="" /></label></dd>';
+    }
+    question_html += '<input type="hidden" name="qlabel" value="' + qlabel + '" />';
+    question_html += '<input type="hidden" name="qtype" value="' + qtype + '" />';
+    question_html += '<input type="submit" value="submit" class="button" />';
+    $('#greeting').hide();
+    $('#quiz').html(question_html).show();
+    $('#quiz').unbind('submit').submit(function(event){
+      submitGuess();
+      event.preventDefault();
+    });
+    $('#quiz-container').show();
+  });
+}
+
+// Passes guess data to remote PHP script for recording to database
+function submitGuess() {
+  var resp_val = '', answer_selected = false;
+  if ($("#quiz input[type=radio]").length) {
+    resp_val = $("#quiz input[name=resp]:checked").val();
+    if (resp_val == '' || resp_val == undefined) {
+      alert('Please select an answer before clicking submit.');
+      return false;
+    } else {
+      answer_selected = true;
+    }
+  } else {
+    resp_val = $("#quiz input[name=resp]").val();
+    if (resp_val == '' || resp_val == undefined) {
+      alert('Please enter an answer before clicking submit.');
+      return false;
+    } else {
+      answer_selected = true;
+    }
+  }
+  //resp_val = encodeURIComponent(resp_val);
+
+  if (answer_selected) {
+    qlabel = $("#quiz input[name=qlabel]").val();
+    var correct;
+    // check if answer is correct and record guess data to DB
+    $.ajax({
+      method: "POST",
+      data: {ue: user_email, ae: attendee_email, q: qlabel, g: resp_val},
+      url: 'submit-guess.php'
+    }).done(function(data) {
+      //console.log(data);
+      correct = data;
+      // let the user know if they were right or wrong
+      if (correct == '1') {
+        $('#quiz-container').html('<p>That\s right!</p>');
+      } else {
+        $('#quiz-container').html('<p>Sorry &mdash; that\'s not correct. Try to find out the answer and I\'ll ask that one again sometime later.</p>');
+      }
+      // update guesses array
+      new_guess_string = '{"' + qlabel + '":"' + correct + '","uid":"' + attendee_uid + '"}';
+      new_guess = JSON.parse(new_guess_string);
+      //console.log('User\'s New Guess:');
+      //console.log(new_guess);
+      guesses.push(new_guess);
+
+      $('#quiz-container').append('<p><a href="#" onclick="makeAGuess(\'' + attendee_email + '\');return false;">Answer Another Question About ' + attendee_name + '</a><br /><br /> or <br /><br /><a href="#" onclick="initializePage();return false;">Choose Another Person</a></p>');
+      clearInterval(status_timer);
+    });
+  }
+}
+
+</script>
+</body>
+</html>

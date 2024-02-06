@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Getting to Know You</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<script type="text/javascript" src="https://use.typekit.com/juj7nhw.js"></script>
+<script type="text/javascript">try{Typekit.load();}catch(e){}</script>
+<link rel="stylesheet" href="_assets/css/default.css" />
+</head>
+<body>
+<div id="page-container">
+  <h1>DSET Conference Quiz</h1>
+  <div id="intro">
+    <p id="greeting">To start, enter the code you were given at registration.</p>
+    <div id="status">Please wait.<div></div></div>
+  </div>
+  <div id="quiz-container">
+     <form id="quiz">
+       <dl>
+         <dt>Your Code</dt>
+         <dd><input type="text" name="code" id="code" value="" /></dd>
+       </dl>
+       <input type="submit" value="submit" />
+     </form>
+  </div>
+</div>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+<script src="_assets/js/common.js"></script>
+<script>
+
+$(document).ready(function(){
+  $('#greeting').show();
+  user_email = readCookie('user_email');
+  user_fname = readCookie('user_fname');
+  user_lname = readCookie('user_lname');
+  user_code = readCookie('user_code');
+  if (user_email == null || user_fname == null || user_lname == null || user_code == null) {
+    $('#quiz').submit(function(event){
+      checkCode();
+      event.preventDefault();
+    });
+    $('#quiz-container').show();
+  } else {
+    checkCode();
+  }
+});
+
+function checkCode() {
+  var code;
+  if (user_code == null) {
+    code = $('#code').val();
+    createCookie('user_code', code, 5);
+  } else {
+    code = user_code;
+  }
+  $.ajax({
+    method: "POST",
+    data: {c: code},
+    url: 'check-code.php'
+  }).done(function(data) {
+    setUserValues(data);
+  });
+}
+
+// Set user values
+function setUserValues(data) {
+  var user_details = JSON.parse(data);
+  user_email = user_details.email_address;
+  user_fname = user_details.fname;
+  user_lname = user_details.lname;
+  if (user_email != '') {
+    $('#quiz').hide();
+    $('#greeting').html('');
+    status_timer = setInterval('updateStatus()', 100);
+    //console.log(user_email);
+    //console.log(user_fname + ' ' + user_lname);
+    createCookie('user_email', user_email, 5);
+    createCookie('user_fname', user_fname, 5);
+    createCookie('user_lname', user_lname, 5);
+    getExistingResponses();
+  } else {
+    alert('Sorry, but I didn\'t find that code in our database. Are you sure you entered it correctly?');
+  }
+}
+
+function getExistingResponses() {
+  $.ajax({
+    method: "POST",
+    url: 'get-responses.php',
+    data: {e: user_email}
+  }).done(function(data) {
+    console.log("Data received in getExistingResponses: ", data); // Log the data
+    recordExistingResponses(data);
+  });
+}
+
+function recordExistingResponses(data) {
+  console.log('User Responses Data:', data); // Log the raw data
+  var unanswered_qs = [];
+  var answered_all = true;
+  
+  existing_responses = JSON.parse(data);
+  console.log('Parsed Responses:', existing_responses); // Log parsed responses
+  
+  Object.keys(existing_responses).forEach(function(key) {
+    if (existing_responses[key] == '' && key != 'uid') {
+      unanswered_qs.push(key); // Collect unanswered questions
+      answered_all = false;
+    }
+  });
+
+  console.log('Unanswered Questions:', unanswered_qs); // Log unanswered questions
+
+  if (answered_all) {
+    $('#greeting').html('<p>Thanks. You\'ve answered all of our questions for now, ' + user_fname + '...</p>').show();
+    $('#quiz').hide();
+  } else {
+    getQuestionHTML(unanswered_qs); // Fetch the next question
+  }
+}
+
+
+
+function getQuestionHTML(questions) {
+    console.log('Fetching question:', questions[0]); // Log the question being fetched
+    $.ajax({
+        method: "POST",
+        data: {q: questions[0]},
+        url: 'get-questions.php'
+    }).done(function(data) {
+        console.log('Question data received:', data); // Log the received question data
+
+        var question = JSON.parse(data); // Parse the received data
+        var question_html = '<dl><dt>' + question.text + '</dt>';
+
+        if (question.type === 'MC') {
+            for (var o_count = 1; o_count <= 5; o_count++) {
+                var response_name = 'response' + o_count;
+                if (question[response_name]) {
+                    question_html += '<dd><label for="resp-o' + o_count + '"><input type="radio" name="resp" id="resp-o' + o_count + '" value="' + question[response_name] + '" /> ' + question[response_name] + '</label></dd>';
+                }
+            }
+        } else if (question.type === 'N') {
+            question_html += '<dd><label for="resp"><input type="number" size="5" min="0" name="resp" id="resp" value="" /></label></dd>';
+        } else if (question.type === 'ON') {
+            question_html += '<dd><label for="resp"><input type="number" name="resp" id="resp" value="" style="width:100%;" /></label></dd>';
+        } else {
+            question_html += '<dd><label for="resp"><input type="text" name="resp" id="resp" value="" style="width:100%;" /></label></dd>';
+        }
+
+        question_html += '</dl>';
+        question_html += '<input type="hidden" name="qlabel" value="' + question.label + '" />';
+        question_html += '<input type="hidden" name="qtype" value="' + question.type + '" />';
+        question_html += '<input type="submit" value="submit" class="button" />';
+
+        $('#quiz').html(question_html).css('display', 'block');
+        $('#quiz-container').show();
+        $('#quiz').unbind('submit').submit(function(event) { // Rebind the submit event to the new form
+            submitResponses();
+            event.preventDefault();
+        });
+
+        console.log('New question HTML:', question_html); // Log the HTML for debugging
+    });
+}
+
+
+
+function submitResponses() {
+  var resp_val, qtype, qlabel;
+  var answer_selected = false;
+
+  if ($("#quiz input[type=radio]").length) {
+    resp_val = $("#quiz input[name=resp]:checked").val();
+    if (!resp_val) {
+      alert('Please select an answer before clicking submit.');
+      return false;
+    } else {
+      answer_selected = true;
+    }
+  } else {
+    resp_val = $("#quiz input[name=resp]").val();
+    if (!resp_val) {
+      alert('Please enter an answer before clicking submit.');
+      return false;
+    } else {
+      answer_selected = true;
+    }
+  }
+
+  if (answer_selected) {
+    qtype = $("#quiz input[name=qtype]").val();
+    qlabel = $("#quiz input[name=qlabel]").val();
+    $.ajax({
+      method: 'POST',
+      data: {e: user_email, ql: qlabel, qt: qtype, rv: resp_val},
+      url: 'submit-response.php'
+    }).done(function(response) {
+      console.log("Response from submit-response.php: ", response);
+      if (response.status === 'success' || response === 'success') { // Handle both possible response types
+        console.log("Question answered: ", qlabel);
+        existing_responses[qlabel] = resp_val; // Update existing_responses
+        var answered_all = true;
+        Object.keys(existing_responses).forEach(function(key) {
+          if (existing_responses[key] === '' && key !== 'uid') {
+            answered_all = false; // Check if there are still unanswered questions
+          }
+        });
+        if (answered_all) {
+          $('#greeting').remove();
+          $('#quiz').html('<p>Thanks. You\'ve answered all of our questions for now, ' + user_fname + '...</p>');
+        } else {
+          getExistingResponses(); // Fetch updated response data if not all questions answered
+        }
+      } else {
+        $('#quiz').html('<p>Sorry, there was an error. Please reload the page and try again. If the problem persists, please send an email to <a href="mailto:emcelroy@concord.org">emcelroy@concord.org</a>.</p>');
+      }
+    });
+  }
+}
+
+
+
+</script>
+</body>
+</html>

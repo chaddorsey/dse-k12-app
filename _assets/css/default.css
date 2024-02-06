@@ -1,0 +1,109 @@
+html, body, div, span, applet, object, iframe,
+h1, h2, h3, h4, h5, h6, p, blockquote, pre,
+a, abbr, acronym, address, big, cite, code,
+del, dfn, em, img, ins, kbd, q, s, samp,
+small, strike, strong, sub, sup, tt, var,
+b, u, i, center,
+dl, dt, dd, ol, ul, li,
+fieldset, form, label, legend,
+table, caption, tbody, tfoot, thead, tr, th, td,
+article, aside, canvas, details, embed,
+figure, figcaption, footer, header, hgroup,
+menu, nav, output, ruby, section, summary,
+time, mark, audio, video {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	font-size: 100%;
+	font: inherit;
+	vertical-align: baseline;
+}
+/* HTML5 display-role reset for older browsers */
+article, aside, details, figcaption, figure,
+footer, header, hgroup, menu, nav, section {
+	display: block;
+}
+body {
+	line-height: 1;
+}
+ol, ul {
+	list-style: none;
+}
+blockquote, q {
+	quotes: none;
+}
+blockquote:before, blockquote:after,
+q:before, q:after {
+	content: '';
+	content: none;
+}
+table {
+	border-collapse: collapse;
+	border-spacing: 0;
+}
+
+body {
+  background: rgb(255, 152, 0);
+  color: #3f3f3f;
+  font: 100% Verdana, Helvetica, sans-serif;
+  }
+h1 {
+  font-size: 1.25em;
+  font-weight: bold;
+  margin-bottom: 1em;
+  }
+p {
+  font-size: 1em;
+  margin-bottom: 1em;
+  }
+em { font-style: italic; }
+strong { font-weight: bold; }
+input { margin-top: 2em; }
+input[type=button], input[type=submit], .button {
+  background: #4285f4;
+  border: none;
+  border-radius: 3px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 1em;
+  padding: 1em 2em;
+  text-transform: uppercase;
+  -webkit-appearance: none;
+  }
+input[type=number] {
+  width: 40px;
+  }
+input[type=text], input[type=number] {
+  padding: 5px;
+  }
+#page-container {
+  background: #fff;
+  border-top: solid 8px rgb(255, 209, 128);
+  box-shadow: 0 1px 4px 0 rgba(0,0,0,0.37);
+  margin: 0;
+  padding: 5%;
+  text-align: center;
+  width: 90%;
+  }
+#greeting, #upload-image, #start-quiz { display: none; }
+#greeting { text-align: left; }
+#status {
+  color: #666;
+  display: none;
+  font-size: 1em;
+  margin-top: 1em;
+  visibility: visible;
+  }
+  #status div {
+    font-family: 'Lucida Console', Monaco, monospace;
+    margin-top: .5em;
+    }
+ #quiz-container { display: none; }
+ #quiz dt { display: block; font-weight: bold; margin-top: 1em; padding: 0; }
+ #quiz dd { display: block; margin: .5em 0; padding: 0;}
+ #quiz { text-align: left; }
+ #attendee-list li { text-align: left; }
+ @media screen and (min-device-width: 1200px) {
+   #page-container { margin: 2em auto; max-width: 500px; }
+   input { margin-top: 1em; }
+ }

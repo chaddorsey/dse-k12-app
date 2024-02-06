@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Getting to Know You</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<script type="text/javascript" src="https://use.typekit.com/juj7nhw.js"></script>
+<script type="text/javascript">try{Typekit.load();}catch(e){}</script>
+<link rel="stylesheet" href="_assets/css/default.css" />
+</head>
+<body>
+<div id="page-container">
+  <h1>DSET Conference Quiz</h1>
+  <div id="intro">
+    <p id="greeting">To start, enter the code you were given at registration.</p>
+    <div id="status">Please wait.<div></div></div>
+  </div>
+  <div id="quiz-container">
+     <form id="quiz">
+       <dl>
+         <dt>Your Code</dt>
+         <dd><input type="text" name="code" id="code" value="" /></dd>
+       </dl>
+       <input type="submit" value="submit" />
+     </form>
+  </div>
+</div>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+<script src="_assets/js/common.js"></script>
+<script>
+
+$(document).ready(function(){
+  $('#greeting').show();
+  user_email = readCookie('user_email');
+  user_fname = readCookie('user_fname');
+  user_lname = readCookie('user_lname');
+  user_code = readCookie('user_code');
+  if (user_email == null || user_fname == null || user_lname == null || user_code == null) {
+    $('#quiz').submit(function(event){
+      checkCode();
+      event.preventDefault();
+    });
+    $('#quiz-container').show();
+  } else {
+    checkCode();
+  }
+});
+
+function checkCode() {
+  var code;
+  if (user_code == null) {
+    code = $('#code').val();
+    createCookie('user_code', code, 5);
+  } else {
+    code = user_code;
+  }
+  $.ajax({
+    method: "POST",
+    data: {c: code},
+    url: 'check-code.php'
+  }).done(function(data) {
+    setUserValues(data);
+  });
+}
+
+// Set user values
+function setUserValues(data) {
+  var user_details = JSON.parse(data);
+  user_email = user_details.email_address;
+  user_fname = user_details.fname;
+  user_lname = user_details.lname;
+  if (user_email != '') {
+    $('#quiz').hide();
+    $('#greeting').html('');
+    status_timer = setInterval('updateStatus()', 100);
+    //console.log(user_email);
+    //console.log(user_fname + ' ' + user_lname);
+    createCookie('user_email', user_email, 5);
+    createCookie('user_fname', user_fname, 5);
+    createCookie('user_lname', user_lname, 5);
+    getExistingResponses();
+  } else {
+    alert('Sorry, but I didn\'t find that code in our database. Are you sure you entered it correctly?');
+  }
+}
+
+function getExistingResponses() {
+  $.ajax({
+    method: "POST",
+    url: 'get-responses.php',
+    data: {e: user_email}
+  }).done(function(data) {
+    recordExistingResponses(data);
+  });
+}
+
+function recordExistingResponses(data) {
+  //console.log('User Responses Data:');
+  //console.log(data);
+  var unanswered_qs = [];
+  var answered_all = true;
+  if (data == '{}') {
+    answered_all = false;
+    existing_responses = JSON.parse(data);
+  } else {
+    existing_responses = JSON.parse(data);
+    Object.keys(existing_responses).forEach(function(key,index) {
+      if (existing_responses[key] == '' && !(key == 'uid')) {
+        unanswered_qs.push(key);
+        answered_all = false;
+      }
+    });
+  }
+  if (answered_all) {
+    $('#greeting').html('<p>Thanks. You\'ve answered all of our questions for now, ' + user_fname + '. Check back for more later.</p><p>In the meantime, <a href="know.html">tell us how well you know your fellow attendees</a> and then <a href="guess.html">guess their answers</a> to the same questions. <br /><br />You may also want to <a href="http://codap.concord.org/releases/latest/static/dg/en/cert/index.html#shared=16886" title="Explore the DSET Data Set in CODAP">explore the DSET dataset in CODAP</a>.</p>').show();
+    $('#start-quiz').remove();
+  } else {
+    $('#greeting').html('<p>Welcome, ' + user_fname + '! What would you like to do?</p><ul><li style="list-style: disc;"><a href="quiz.html">Answer questions about yourself</a></li><li style="list-style: disc;"><a href="know.html">Tell us how well you know your fellow attendees</a></li><li style="list-style: disc;"><a href="guess.html">Guess other attendees answers</a></li><li style="list-style: disc;"><a href="http://codap.concord.org/releases/latest/static/dg/en/cert/index.html#shared=16886" title="Explore the DSET Data Set in CODAP">Explore the DSET dataset in CODAP</a></li></ul>').show();
+  }
+}
+
+function getQuestionHTML(questions) {
+  $('#greeting').html('').hide();
+  // get options from database
+  var q;
+  if (questions.constructor === Array) {
+    q = questions[0];
+  } else {
+    q = questions;
+  }
+  $.ajax({
+    method: "POST",
+    data: {q: q},
+    url: 'get-questions.php'
+  }).done(function(data) {
+    //console.log('Get Question Data:');
+    //console.log(data);
+    question = JSON.parse(data);
+    // build HTML
+    var question_html = '',
+      qtype = question.type,
+      qtext = question.text,
+      qlabel = question.label;
+
+    question_html += '<dt>' + qtext + '</dt>';
+    if (qtype == 'MC') {
+      for (var o_count = 1; o_count < 10; o_count++) {
+        var response_name = 'response' + o_count;
+        if (question[response_name]) {
+          question_html += '<dd><label for="resp-o' + o_count + '"><input type="radio" name="resp" id="resp-o' + o_count + '" value="' + question[response_name] + '" /> ' + question[response_name] + '</label></dd>';
+        }
+      }
+    } else if (qtype == 'N') {
+      question_html += '<dd><label for="resp"><input type="number" size="5" min="0" name="resp" id="resp" value="" /></label></dd>';
+    } else {
+      question_html += '<dd><label for="resp"><input type="text" name="resp" id="resp" value="" /></label></dd>';
+    }
+    question_html += '<input type="hidden" name="qlabel" value="' + qlabel + '" />';
+    question_html += '<input type="hidden" name="qtype" value="' + qtype + '" />';
+    question_html += '<input type="submit" value="submit" class="button" />';
+    $('#quiz').html(question_html).show();
+    $('#quiz').unbind('submit').submit(function(event){
+      submitResponses();
+      event.preventDefault();
+    });
+    $('#quiz-container').show();
+  });
+}
+
+function submitResponses() {
+  var responses = [];
+  var answer_selected = false;
+  if ($("#quiz input[type=radio]").length) {
+    resp_val = $("#quiz input[name=resp]:checked").val();
+    if (resp_val == '' || resp_val == undefined) {
+      alert('Please select an answer before clicking submit.');
+      return false;
+    } else {
+      answer_selected = true;
+    }
+  } else {
+    resp_val = $("#quiz input[name=resp]").val();
+    if (resp_val == '' || resp_val == undefined) {
+      alert('Please enter an answer before clicking submit.');
+      return false;
+    } else {
+      answer_selected = true;
+    }
+  }
+
+  if (answer_selected) {
+    qtype = $("#quiz input[name=qtype]").val();
+    qlabel = $("#quiz input[name=qlabel]").val();
+    $.ajax({
+      method: 'POST',
+      data: {e: user_email, ql: qlabel, qt: qtype, rv: resp_val},
+      url: 'submit-response.php'
+    }).done(function(msg) {
+      //console.log(msg);
+      if (msg == 'success') {
+        existing_responses[qlabel] = resp_val;
+        if (existing_responses['email_address'] == '') {
+          existing_responses['email_address'] = user_email;
+        }
+        //console.log(existing_responses);
+        var answered_all = true;
+        var answer_index = 0;
+        Object.keys(existing_responses).forEach(function(key,index) {
+          if (existing_responses[key] == '') {
+            answered_all = false;
+          }
+          answer_index++;
+        });
+        if (answered_all && answer_index > 1) {
+          $('#greeting').remove();
+          $('#quiz').html('<p>Thanks. You\'ve answered all of our questions for now, ' + user_fname + '. Check back for more later.</p><p>In the meantime, <a href="know.html">tell us how well you know your fellow attendees</a> and then <a href="guess.html">guess their answers</a> to the same questions. <br /><br />You may also want to <a href="http://codap.concord.org/releases/latest/static/dg/en/cert/index.html#shared=16886" title="Explore the DSET Data Set in CODAP">explore the DSET dataset in CODAP</a>.</p>');
+        } else {
+          //$('#quiz').html('<p>Thanks! Care to tell us more?</p>');
+          getExistingResponses();
+        }
+      } else {
+        $('#quiz').html('<p>Sorry, there was an error. Please reload the page and try again. If the problem persists, please send an email to <a href="mailto:emcelroy@concord.org">emcelroy@concord.org</a>.</p>');
+      }
+    });
+  }
+}
+</script>
+</body>
+</html>

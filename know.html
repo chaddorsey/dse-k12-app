@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Getting to Know You</title>
+<script type="text/javascript" src="https://use.typekit.com/juj7nhw.js"></script>
+<script type="text/javascript">try{Typekit.load();}catch(e){}</script>
+<link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css" />
+<link rel="stylesheet" href="_assets/css/default.css" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body>
+<div id="page-container">
+  <h1>DSET Conference Quiz</h1>
+  <div id="intro">
+    <p id="greeting"></p>
+    <div id="status">Please wait.<div></div></div>
+  </div>
+  <div id="quiz-container">
+     <form id="quiz"></form>
+  </div>
+</div>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+<script src="_assets/js/common.js"></script>
+<script>
+
+$(document).ready(function(){
+  $('#greeting').show();
+  user_email = readCookie('user_email');
+  user_fname = readCookie('user_fname');
+  user_lname = readCookie('user_lname');
+  user_code = readCookie('user_code');
+  if (user_fname !== null) {
+    $('#user').text(', ' + user_fname);
+  }
+  if (user_email !== null) {
+    startAcquiantanceQuiz();
+  } else {
+    authenticateUser();
+  }
+});
+
+function checkCode() {
+  var code;
+  if (user_code == null) {
+    code = $('#code').val();
+    createCookie('user_code', code, 5);
+  } else {
+    code = user_code;
+  }
+  $.ajax({
+    method: "POST",
+    data: {c: code},
+    url: 'check-code.php'
+  }).done(function(data) {
+    setUserValues(data);
+  });
+}
+
+// Creates a list of attendees to choose from
+function setUserValues(data) {
+  var user_details = JSON.parse(data);
+  user_email = user_details.email_address;
+  user_fname = user_details.fname;
+  user_lname = user_details.lname;
+  if (user_email != '') {
+    $('#quiz').hide();
+    $('#greeting').html('');
+    status_timer = setInterval('updateStatus()', 100);
+    //console.log(user_email);
+    //console.log(user_fname + ' ' + user_lname);
+    createCookie('user_email', user_email, 5);
+    createCookie('user_fname', user_fname, 5);
+    createCookie('user_lname', user_lname, 5);
+    startAcquiantanceQuiz()
+  } else {
+    alert('Sorry, but I didn\'t find that code in our database. Are you sure you entered it correctly?');
+  }
+}
+
+function startAcquiantanceQuiz() {
+  $('#greeting').html('We need you to help us gather data to track the DSET community as it forms. To do this, we need to know the people you recognize and then <em>narrow those names down</em> to those to whom you have strong professional ties. Let\'s start simply:<br /><br />In the list below, <strong>check off all the names you recognize</strong>. (If you\'re returning to this page and just met someone new, you can use the search feature to find them quickly.)');
+  $('#quiz').html('<p id="search-container"><label for="search">Filter by name:</label><br /><input type="text" name="search" id="search" value="" placeholder="Enter a name to find someone specific..." style="width: 225px;" /> <a id="clear-search" style="display: none; font-size: .7em;" href="#" onclick="clearSearch();return false;">clear</a></p>');
+  $.ajax({
+    method: "POST",
+    url: 'attendees.php'
+  }).done(function(data) {
+    populateAttendeesCheckList(data);
+  });
+}
+
+function clearSearch() {
+  $('#search').val('');
+  $('#clear-search').hide();
+  $('#quiz li').show();
+}
+
+// Creates a list of attendees to choose from
+function populateAttendeesCheckList(data) {
+  attendees = JSON.parse(data);
+  var attendees_list_html = '',
+      attendees_list = [];
+  for (var i = 0; i < attendees.length; i++) {
+    if (attendees[i].email_address != user_email) {
+      attendees_list.push(attendees[i].name);
+      attendees_list_html += '<li><label for="attendees_known' + i + '"><input type="checkbox" name="attendees_known[]" id="attendees_known' + i + '" value="' + attendees[i].email_address + '"> ' + attendees[i].name + '</label></li>';
+    }
+  }
+  $("#search").autocomplete({
+    source: attendees_list,
+    select: function( event, ui ) {
+      $('#clear-search').show();
+      var name_selected = ui.item.value;
+      $('#quiz li label').each(function() {
+        if (' ' + name_selected == $(this).text()) {
+          //$(this).children('input:checkbox').prop('checked', true);
+        } else {
+          $(this).parent().hide();
+        }
+      });
+    }
+  });
+  $('#quiz').append('<ul id="attendee-list"></ul>');
+  $('#attendee-list').html(attendees_list_html);
+  $('#quiz').append('<input type="submit" value="submit" class="button" />').unbind('submit').submit(function(event){
+    trimList1();
+    event.preventDefault();
+  });
+  $('#quiz-container, #quiz').show();
+  $('#status').hide();
+  clearInterval(status_timer);
+}
+
+function trimList1() {
+  $('#search-container').hide();
+  $('#quiz input:checkbox').each(function() {
+    if (!($(this).is(':checked'))) {
+      //console.log('removed');
+      $(this).parent().parent().remove();
+    } else {
+      $(this).parent().parent().show();
+      recognized_attendees.push($(this).val());
+    }
+  });
+  //console.log(recognized_attendees);
+  $('html, body').animate({ scrollTop: $("#page-container").offset().top }, 500);
+  $('#greeting').html('Great. We\'ve got a list of the names you indicated recognizing. Now we need to know which of these people you\'ve interacted with before. <br /><br />Modify the list below so it shows us <em>only those people you\'ve actually talked with</em>. <br /><br />To do this, please <strong>uncheck the names</strong> of anyone whose name you recognize, but whom you have never spoken with.');
+  //$('#quiz input:checkbox').each(function() {
+  //  $(this).prop('checked', false);
+  //});
+  $('#quiz').unbind('submit').submit(function(event){
+    trimList2();
+    event.preventDefault();
+  });
+}
+
+function trimList2() {
+  $('#quiz input:checkbox').each(function() {
+    if (!($(this).is(':checked'))) {
+      $(this).parent().parent().remove();
+    } else {
+      $(this).parent().parent().show();
+      talked_to_attendees.push($(this).val());
+    }
+  });
+  //console.log(talked_to_attendees);
+  $('html, body').animate({ scrollTop: $("#page-container").offset().top }, 500);
+  $('#greeting').html('Excellent &mdash; the last step in helping track the DSET community is to figure out <em>which of these people you have stronger ties with</em>. Below are all the people you indicated having talked with. <br /><br />Which of these people are important in your professional network? Go through the list and <strong>leave only those names checked</strong>.<br /><br />Think of this as the following: Which of the below provide you with information or resources relevant to your job, help you think about complex problems posed by your work, or provide developmental advice or personal support helpful in your working life?');
+  //$('#quiz input:checkbox').each(function() {
+  //  $(this).prop('checked', false);
+  //});
+  $('#quiz').unbind('submit').submit(function(event){
+    trimList3();
+    event.preventDefault();
+  });
+}
+
+function trimList3() {
+  $('#quiz input:checkbox').each(function() {
+    if (!($(this).is(':checked'))) {
+      $(this).parent().parent().remove();
+    } else {
+      $(this).parent().parent().show();
+      known_well_attendees.push($(this).val());
+    }
+  });
+  //console.log(known_well_attendees);
+  $('#greeting').html('Thanks for helping us gather data on the DSET community as it grows. Now we know your close ties, but how well do <em>you</em> know them? <a href="guess.html">Take a quiz</a> and find out for real!');
+  $('#quiz input:checkbox').each(function() {
+    $(this).parent().parent().remove();
+  });
+  $('#quiz').unbind('submit').submit(function(event){
+    event.preventDefault();
+  });
+  $('#quiz input[type=submit]').remove();
+  submitKnowData();
+}
+
+function submitKnowData() {
+  // remove talked_to_attendees from recognized_attendees
+  for (tai = 0; tai < talked_to_attendees.length; tai++) {
+    var ai = recognized_attendees.indexOf(talked_to_attendees[tai]);
+    if (ai > -1) {
+      recognized_attendees.splice(ai, 1);
+    }
+  }
+
+  // remove known_well_attendees from talked_to_attendees
+  for (kai = 0; kai < known_well_attendees.length; kai++) {
+    var ai = talked_to_attendees.indexOf(known_well_attendees[kai]);
+    if (ai > -1) {
+      talked_to_attendees.splice(ai, 1);
+    }
+  }
+
+  // create JSON strings of arrays
+  var recognized_attendees_json = makeJSONString(recognized_attendees);
+  var talked_to_attendees_json = makeJSONString(talked_to_attendees);
+  var known_well_attendees_json = makeJSONString(known_well_attendees);
+
+  $.ajax({
+    method: "POST",
+    data: {e: user_email, r: recognized_attendees_json, t: talked_to_attendees_json, k: known_well_attendees_json},
+    url: 'submit-know.php'
+  }).done(function(data) {
+    //console.log(data);
+  });
+}
+
+function makeJSONString(array) {
+  var json_string = '[';
+  for (var ai = 0; ai < array.length; ai++) {
+    json_string += '{"email":"' + array[ai] + '"},';
+  }
+  json_string = json_string.replace(/,$/, '');
+  json_string += ']';
+  return json_string;
+}
+</script>
+</body>
+</html>
